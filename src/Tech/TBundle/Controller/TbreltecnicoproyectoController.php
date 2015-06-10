@@ -8,6 +8,7 @@ use Tech\TBundle\Entity\Tbreltecnicoproyecto;
 use Tech\TBundle\Form\TbreltecnicoproyectoType;
 use Tech\TBundle\Entity\Tbdetcotizacion;
 use Tech\TBundle\Form\TbdetcotizacionType;
+use DateTime;
 
 /**
  * Tbreltecnicoproyecto controller.
@@ -372,45 +373,62 @@ class TbreltecnicoproyectoController extends Controller {
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
         $em = $this->getDoctrine()->getManager();
-
+        $date = new DateTime();
+        $today = $date->format('d-m-Y');
+        $message_error='';
         if ($form->isValid()) {
-
             $persist = false;
             foreach ($_POST as $clave => $ins) {
-                $a = strpos($clave, 's_');
-                if ($a !== false) {
-                    $cotizacion = $em->getRepository('TechTBundle:Tbdetcotizacion')->find(substr($clave, 2));
-                    $relcotizacion = $em->getRepository('TechTBundle:Tbreltecnicoproyecto')->findOneBy(
-                            array('fkIidTbdetcotizacion' => $cotizacion));
-                    $instalador = $em->getRepository('TechTBundle:Tbdettecnico')->find($ins);
-                    if (empty($relcotizacion) || $relcotizacion == null) {
-                        $relTecnicoPry = new Tbreltecnicoproyecto();
-                        $persist = true;
+                
+                    $a = strpos($clave, 's_');
+                    if ($a !== false) {
+                        $cotizacion = $em->getRepository('TechTBundle:Tbdetcotizacion')->find(substr($clave, 2));
+                        if ($cotizacion!=null && $cotizacion->getTbdetliderpmo() != null) {
+                        $relcotizacion = $em->getRepository('TechTBundle:Tbreltecnicoproyecto')->findOneBy(
+                                array('fkIidTbdetcotizacion' => $cotizacion));
+                        $instalador = $em->getRepository('TechTBundle:Tbdettecnico')->find($ins);
+
+                        // Validar que exista el lider asignado 
+
+                        if (empty($relcotizacion) || $relcotizacion == null) {
+                            $relTecnicoPry = new Tbreltecnicoproyecto();
+                            $persist = true;
+                        } else {
+                            $relTecnicoPry = $relcotizacion;
+                            $persist = false;
+                        }
+
+                        $relTecnicoPry->setDfecha($date);
+                        $relTecnicoPry->setFkIidTbdetcotizacion($cotizacion);
+                        $relTecnicoPry->setFkIidTbdettecnico($instalador);
+                        $relTecnicoPry->setVdescripcioncambioest('');
+                        if ($persist) {
+                            $em->persist($relTecnicoPry);
+                        }
+                    }else{
+                    $message_error= "El Proyecto ".$cotizacion->getCodcotizacion()
+                            ." no posee asociado un lider por lo cual no puede "
+                            . "asociar el instalador"+$message_error;
+                    $this->get('session')->getFlashBag()->add('flash_error', $message_error);
+                    
                     }
-                    $relTecnicoPry = $relcotizacion;
-                    $relTecnicoPry->setDfecha(new \DateTime);
-                    $relTecnicoPry->setFkIidTbdetcotizacion($cotizacion);
-                    $relTecnicoPry->setFkIidTbdettecnico($instalador);
-                    $relTecnicoPry->setVdescripcioncambioest('');
-                    if ($persist) {
-                        $em->persist($relTecnicoPry);
-                    }
+                    
                 }
             }
 
 
-
-            $em->flush();
+            if ($message_error==''){
+                $em->flush();
             //print($_POST);
             $message_success = "Su asociación se realizó correctamente";
             $this->get('session')->getFlashBag()->add('flash_success', $message_success);
             return $this->redirect($this->generateUrl('Asignacion_new'));
+            }
+            
+        
         }
 
-        return $this->render('TechTBundle:Tbreltecnicoproyecto:new.html.twig', array(
-                    'entity' => $entity,
-                    'form' => $form->createView(),
-        ));
+        return $this->redirect($this->generateUrl('Asignacion_new'));
     }
 
     /**
